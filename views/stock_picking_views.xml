@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+        <record id="view_picking_internal_search" model="ir.ui.view">
+            <field name="name">stock.picking.internal.search</field>
+            <field name="model">stock.picking</field>
+            <field name="inherit_id" ref="stock.view_picking_internal_search"/>
+            <field name="priority">15</field>
+            <field name="arch" type="xml">
+
+                <xpath expr="//filter[@name='draft']" position="before">
+                    <filter name="ready_to_receive" string="Ready to Receive" domain="[('income_ready_state', '=', False)]" help="Ready to Receive"/>
+                </xpath>
+
+                <xpath expr="//filter[@name='available']" position="replace">
+                    <filter name="available" string="Ready" domain= "[('all_ready_state', '=', False), ('state', '=', 'assigned')]" help="Assigned Moves"/>
+                </xpath>
+
+            </field>
+        </record>
+
+
+        <record id="action_picking_tree_internal_income_ready" model="ir.actions.act_window">
+            <field name="name">Ready to Receive</field>
+            <field name="res_model">stock.picking</field>
+            <field name="type">ir.actions.act_window</field>
+            <field name="view_mode">tree,kanban,form,calendar</field>
+            <field name="domain"></field>
+            <field name="context">{'contact_display': 'partner_address', 'search_default_ready_to_receive': 1}</field>
+            <field name="search_view_id" ref="stock.view_picking_internal_search"/>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    No Receiving transfer found.
+                </p>
+            </field>
+       </record>
+
+</odoo>
