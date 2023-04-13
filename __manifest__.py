@@ -8,7 +8,7 @@
     'author': 'Benlever Pvt Ltd',
     'website': 'https://www.benlever.com',
     'category': 'Inventory/Inventory',
-    'sequence': 6,
+    'sequence': 10,
     'summary': 'Manages stock transfer',
     'description': """
 

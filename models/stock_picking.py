@@ -25,39 +25,8 @@ class PickingType(models.Model):
     count_picking_internal_income_ready = fields.Integer('Sequencesk')
 
     def _compute_picking_count(self):
-        _logger.info("#######################_compute_picking_count")  # @TODO TOBE REMOVED
-        domains = {
-            'count_picking_draft': [('state', '=', 'draft')],
-            'count_picking_waiting': [('state', 'in', ('confirmed', 'waiting'))],
-            'count_picking_ready': [('state', '=', 'assigned')],
-            'count_picking': [('state', 'in', ('assigned', 'waiting', 'confirmed'))],
-            'count_picking_late': [('scheduled_date', '<', time.strftime(DEFAULT_SERVER_DATETIME_FORMAT)),
-                                   ('state', 'in', ('assigned', 'waiting', 'confirmed'))],
-            'count_picking_backorders': [('backorder_id', '!=', False),
-                                         ('state', 'in', ('confirmed', 'assigned', 'waiting'))],
-        }
-        for field in domains:
-            data = self.env['stock.picking']._read_group(domains[field] +
-                                                         [('state', 'not in', ('done', 'cancel')),
-                                                          ('picking_type_id', 'in', self.ids)],
-                                                         ['picking_type_id'], ['picking_type_id'])
-            count = {
-                x['picking_type_id'][0]: x['picking_type_id_count']
-                for x in data if x['picking_type_id']
-            }
-            _logger.info("####################### INTERNAL COUNT::%s", pprint.pformat(count))  # @TODO TOBE REMOVED
-            for record in self:
-                record[field] = count.get(record.id, 0)
+        super(PickingType, self)._compute_picking_count()
 
-        _logger.info("#######################_compute_internal_picking_count")  # @TODO TOBE REMOVED
-
-        """domains[field] +
-        [('state', 'not in', ('done', 'cancel')),
-        # ('picking_type_id', 'in', self.ids)
-        ],
-        ['picking_type_id'], ['picking_type_id'])"""
-
-        _logger.info("####################### INTERNAL COUNT::%s", pprint.pformat(count))  # @TODO TOBE REMOVED
 
         for record in self:
             if record.code == 'internal':
