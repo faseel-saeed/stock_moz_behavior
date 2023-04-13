@@ -7,8 +7,9 @@
             <field name="arch" type="xml">
                 <xpath expr="//group[@name='group_resupply']" position="after">
                     <group name="group_validation" string="Rights Groups" >
-                        <field name="validate_group_id"/>
-                        <field name="external_validate_group_id"/>
+                        <field name="internal_validate_group_id"/>
+                        <field name="outgoing_validate_group_id"/>
+                        <field name="incoming_validate_group_id"/>
                     </group>
                 </xpath>
             </field>

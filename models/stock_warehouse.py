@@ -13,10 +13,14 @@ _logger = logging.getLogger(__name__)
 class Warehouse(models.Model):
     _inherit = "stock.warehouse"
 
-    validate_group_id = fields.Many2one(
+    internal_validate_group_id = fields.Many2one(
         'res.groups', 'Internal Validation Group', required=False,
         help='This group is allowed to validate the internal stock movement for this warehouse.')
 
-    external_validate_group_id = fields.Many2one(
-        'res.groups', 'External Validation Group', required=False,
-        help='This group is allowed to validate stock movement types (other than internal) for this warehouse.')
+    outgoing_validate_group_id = fields.Many2one(
+        'res.groups', 'Delivery Validation Group', required=False,
+        help='This group is allowed to validate the outgoing stock movement for this warehouse.')
+
+    incoming_validate_group_id = fields.Many2one(
+        'res.groups', 'Receipt Validation Group', required=False,
+        help='This group is allowed to validate the incoming stock movement for this warehouse.')
