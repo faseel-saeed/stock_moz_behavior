@@ -32,14 +32,13 @@ class PickingType(models.Model):
             # if record.code == 'internal':
             type_warehouse_id = record.warehouse_id.id
 
-            query = """SELECT count(distinct(sp.*)) FROM stock_picking sp, stock_location sl, stock_picking_type spt
-                            where sp.picking_type_id = spt.id and spt.company_id = %s and spt.code = '%s'
-                            and sp.state = 'assigned' and sp.company_id = %s
-                            and (sp.location_dest_id = sl.id or sp.location_dest_id = sl.location_id)
-                            and sl.company_id = %s and sl.warehouse_id = %s""" \
-                    % (self.env.company.id, record.code, self.env.company.id, self.env.company.id, type_warehouse_id)
+            query = """SELECT count(distinct(sp.*)) FROM stock_picking sp
+                                        where sp.picking_type_code = '%s'
+                                        and sp.state = 'assigned' and sp.company_id = %s
+                                        and sp.location_dest_warehouse_id = %s""" \
+                    % (record.code, self.env.company.id,  type_warehouse_id)
 
-            _logger.info(query)  # @TODO TOBE REMOVED
+            #_logger.info(query)  # @TODO TOBE REMOVED
 
             self.env.cr.execute(query)
             count_row = self.env.cr.fetchone()
@@ -77,12 +76,90 @@ class PickingType(models.Model):
         _logger.info("#######################get_action_internal_income_ready")  # @TODO TOBE REMOVED
         return self._get_moz_action('stock_moz_behavior.action_picking_tree_internal_income_ready')
 
+    @api.model
+    def web_search_read(self, domain=None, fields=None, offset=0, limit=None, order=None, count_limit=None):
+        _logger.info("#######################STOCK_PICKING_web_search_read")  # @TODO TOBE REMOVED
+
+        """
+        Performs a search_read and a search_count.
+
+        :param domain: search domain
+        :param fields: list of fields to read
+        :param limit: maximum number of records to read
+        :param offset: number of records to skip
+        :param order: columns to sort results
+        :return: {
+            'records': array of read records (result of a call to 'search_read')
+            'length': number of records matching the domain (result of a call to 'search_count')
+        }
+        """
+
+        stock_warehouse_ids = self.env.user.sudo().stock_warehouse_id.ids
+
+        _logger.info("#######################DOMAIN %s", pprint.pformat(domain))  # @TODO TOBE REMOVED
+        _logger.info("#######################FIELDS %s", pprint.pformat(fields))  # @TODO TOBE REMOVED
+        _logger.info("#######################WAREHOUSEIDS %s", pprint.pformat(stock_warehouse_ids))  # @TODO TOBE REMOVED
+
+        domain.append(['warehouse_id', 'in', stock_warehouse_ids])
+
+
+        records = self.search_read(domain, fields, offset=offset, limit=limit, order=order)
+
+        if not records:
+            return {
+                'length': 0,
+                'records': []
+            }
+        if limit and (len(records) == limit or self.env.context.get('force_search_count')):
+            length = self.search_count(domain, limit=count_limit)
+        else:
+            length = len(records) + offset
+        return {
+            'length': length,
+            'records': records
+        }
+
 
 class Picking(models.Model):
     _inherit = "stock.picking"
 
     income_ready_state = fields.Integer('ReadyState')
     all_ready_state = fields.Integer('AllReadyState')
+
+    @api.model
+    def _get_warehouse_domain(self):
+        return [('warehouse_id', 'in', self.env.user.sudo().stock_warehouse_id.ids)]
+
+    @api.model
+    def _get_user_warehouses(self):
+        return self.env.user.sudo().stock_warehouse_id.ids
+
+    picking_type_id = fields.Many2one(
+        'stock.picking.type', 'Operation Type',
+        required=True, readonly=True, index=True,
+        states={'draft': [('readonly', False)]},
+        domain=_get_warehouse_domain
+    )
+
+    location_id = fields.Many2one(
+        'stock.location', "Source Location",
+        compute="_compute_location_id", store=True, precompute=True, readonly=False,
+        check_company=True, required=True,
+        states={'done': [('readonly', True)]},
+        domain=_get_warehouse_domain
+    )
+
+    location_source_warehouse_id = fields.Many2one(
+        'stock.warehouse', string='location source warehouse', related='location_id.warehouse_id',
+        readonly=True, store=True, index=True)
+
+    location_dest_warehouse_id = fields.Many2one(
+        'stock.warehouse', string='location dest warehouse', related='location_dest_id.warehouse_id',
+        readonly=True, store=True, index=True)
+
+    picking_type_code = fields.Selection(
+        related='picking_type_id.code',
+        readonly=True, store=True, index=True)
 
     def _is_allowed_to_validate(self, warehouse_id, type_code):
         # get the group id of the warehouse
@@ -95,6 +172,7 @@ class Picking(models.Model):
         self.env.cr.execute(query)
         group_row = self.env.cr.fetchone()
 
+        _logger.info("####################_TYPE_CODE: %s" % type_code)  # @TODO TOBE REMOVED
         if type_code == 'internal':
             group_id = group_row and group_row[0] or False
         elif type_code == 'outgoing':
@@ -127,7 +205,13 @@ class Picking(models.Model):
         _logger.info("####################_BUTTON_VALIDATE_PICKING_TYPE WAREHOUSE ID %s",
                      self.location_dest_id.warehouse_id.id)  # @TODO TOBE REMOVED
 
-        warehouse_id = self.location_dest_id.warehouse_id.id
+        _logger.info("####################_TYPE_CODE: %s" % self.picking_type_id.code)  # @TODO TOBE REMOVED
+
+        if self.picking_type_id.code == 'outgoing':
+            warehouse_id = self.location_id.warehouse_id.id
+        else:
+            warehouse_id = self.location_dest_id.warehouse_id.id
+
         if not warehouse_id:
             raise UserError(
                 'You cannot receive a transfer if the warehouse for the location is not defined. '
@@ -165,8 +249,6 @@ class Picking(models.Model):
         location_id = 0
         warehouse_id = 0
         picking_code = ''
-        location_search_ids = []
-        picking_search_ids = []
 
         for x in domain:
             _logger.info("____ALL_________x %s", x)  # @TODO TOBE REMOVED
@@ -196,23 +278,8 @@ class Picking(models.Model):
             warehouse_id = loc_row and loc_row[0] or 0
             picking_code = loc_row and loc_row[1] or ''
 
-            query = """SELECT distinct(sp.id) FROM stock_picking sp, stock_location sl, stock_picking_type spt
-                                       where sp.picking_type_id = spt.id and spt.company_id = %s and spt.code = '%s'
-                                       and sp.state = 'assigned' and sp.company_id = %s
-                                       and (sp.location_dest_id = sl.id or sp.location_dest_id = sl.location_id)
-                                       and sl.company_id = %s and sl.warehouse_id = %s""" \
-                    % (self.env.company.id, picking_code, self.env.company.id, self.env.company.id, warehouse_id)
-
-            _logger.info(query)  # @TODO TOBE REMOVED
-
-            self.env.cr.execute(query)
-            for rec in self.env.cr.fetchall():
-                if rec[0] not in picking_search_ids:
-                    picking_search_ids.append(rec[0])
 
 
-        _logger.info("____LOCATION_SEARCH_ID_________ %s", pprint.pformat(picking_search_ids))  # @TODO TOBE REMOVED
-        _logger.info("____PICKING_SEARCH_ID_________ %s", pprint.pformat(location_search_ids))  # @TODO TOBE REMOVED
         _logger.info("____SEARCH TYPE_________ %s", search_type)  # @TODO TOBE REMOVED
         _logger.info("____PICKING TYPE_________ %s", picking_type)  # @TODO TOBE REMOVED
         _logger.info("____LOCATION_ID_________ %s", location_id)  # @TODO TOBE REMOVED
@@ -221,17 +288,32 @@ class Picking(models.Model):
         _logger.info("____PICKING_CODE_________ %s", picking_code)  # @TODO TOBE REMOVED
         _logger.info("#######################DOMAIN %s", pprint.pformat(domain))  # @TODO TOBE REMOVED
 
+        warehouse_ids = self._get_user_warehouses()
+
         if search_type == 1:
-            domain = [("id", "in", picking_search_ids)]
+            domain = [('location_dest_warehouse_id', '=', warehouse_id), ('picking_type_code', '=', picking_code),
+                      ('location_dest_warehouse_id', 'in', warehouse_ids),
+                      ('state', '=', 'assigned')]
+
         elif search_type == 2:
-            domain = ['&', ('state', '=', 'assigned'), '|', ('id', 'in', picking_search_ids),
+            domain = ['|',
+                      '&', '&', '&',
+                      ('location_dest_warehouse_id', '=', warehouse_id),
+                      ('picking_type_code', '=', picking_code),
+                      ('location_dest_warehouse_id', 'in', warehouse_ids),
+                      ('state', '=', 'assigned'),
+                      '&', '&',
+                      ('state', '=', 'assigned'),
+                      ('location_source_warehouse_id', 'in', warehouse_ids),
                       ('picking_type_id', '=', picking_type)]
+        else:
+            domain.append(['location_source_warehouse_id', 'in', warehouse_ids])
 
         records = self.search_read(domain, fields, offset=offset, limit=limit, order=order)
-
         _logger.info("#######################COUNT %s", len(records))  # @TODO TOBE REMOVED
         _logger.info("#######################DOMAIN %s", pprint.pformat(domain))  # @TODO TOBE REMOVED
         _logger.info("#######################FIELDS %s", pprint.pformat(fields))  # @TODO TOBE REMOVED
+        #_logger.info("#######################WWWW %s", pprint.pformat()  # @TODO TOBE REMOVED
 
         if not records:
             return {

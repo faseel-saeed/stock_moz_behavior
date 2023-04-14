@@ -4,7 +4,7 @@
 
 {
     'name': 'Stock Moz Behavior',
-    'version': '0.1.1',
+    'version': '0.1.2',
     'author': 'Benlever Pvt Ltd',
     'website': 'https://www.benlever.com',
     'category': 'Inventory/Inventory',
@@ -19,6 +19,7 @@ This module enhances the functionality of the stock transfer
         'views/stock_picking_type_views.xml',
         'views/stock_picking_views.xml',
         'views/stock_warehouse_views.xml',
+        'views/res_users.xml',
     ],
     'installable': True,
     'license': 'LGPL-3',
