@@ -249,8 +249,10 @@ class Picking(models.Model):
         location_id = 0
         warehouse_id = 0
         picking_code = ''
+        original_domains = []
 
         for x in domain:
+            original_domains.append(x)
             _logger.info("____ALL_________x %s", x)  # @TODO TOBE REMOVED
             if x[0] == 'income_ready_state':
                 search_type = 1
@@ -288,6 +290,10 @@ class Picking(models.Model):
         _logger.info("____PICKING_CODE_________ %s", picking_code)  # @TODO TOBE REMOVED
         _logger.info("#######################DOMAIN %s", pprint.pformat(domain))  # @TODO TOBE REMOVED
 
+        _logger.info("#######################ORIGINAL_DOMAIN %s", pprint.pformat(original_domains))  # @TODO TOBE REMOVED
+
+
+
         warehouse_ids = self._get_user_warehouses()
 
         if search_type == 1:
@@ -307,7 +313,12 @@ class Picking(models.Model):
                       ('location_source_warehouse_id', 'in', warehouse_ids),
                       ('picking_type_id', '=', picking_type)]
         else:
-            domain.append(['location_source_warehouse_id', 'in', warehouse_ids])
+           # domain.append(['location_source_warehouse_id', 'in', warehouse_ids])
+            domain = ['|', '&', ('location_dest_warehouse_id', 'in', warehouse_ids),
+                      ('state', 'in', ['assigned', 'done']),
+                      ['location_source_warehouse_id', 'in', warehouse_ids]] + domain
+
+
 
         records = self.search_read(domain, fields, offset=offset, limit=limit, order=order)
         _logger.info("#######################COUNT %s", len(records))  # @TODO TOBE REMOVED
